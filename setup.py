@@ -11,14 +11,14 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
-exec(open("pypat/version.py").read())
+exec(open("xtrainers/version.py").read())
 setup(
-    name="pypat",
+    name="xtrainers",
     version=__version__,
-    description="Python Package Template",
+    description="Efficient training for Machine Learning",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/Doraemonzzz/Python-Package-Template",
+    url="https://github.com/Doraemonzzz/xtrainers",
     author="Doraemonzzz",
     author_email="doraemon_zzz@163.com",
     classifiers=[
