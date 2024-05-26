@@ -65,13 +65,6 @@ def get_data(config_dict):
     return tokenizer, train_data, valid_data
 
 
-def get_loss(config_dict):
-    if config_dict["loss_type"] == "naive_ce":
-        return nn.CrossEntropyLoss
-    else:
-        return nn.CrossEntropyLoss
-
-
 def get_trainer_class(config_dict):
     if config_dict["type"] == "accelerate":
         trainer = AccTrainer
@@ -81,11 +74,11 @@ def get_trainer_class(config_dict):
     return trainer
 
 
-def get_trainer(config_dict, model, tokenizer, train_data, valid_data, loss_fn):
+def get_trainer(config_dict, model, tokenizer, train_data, valid_data):
     trainer_class = get_trainer_class(config_dict)
 
     trainer = trainer_class(
-        config_dict, model, tokenizer, train_data, valid_data, loss_fn
+        config_dict, model, tokenizer, train_data, valid_data
     )
 
     return trainer
@@ -100,23 +93,15 @@ def main():
     # Get tokenizer, data, model, loss
     tokenizer, train_data, valid_data = get_data(config_dict["data"])
     model = get_model(config_dict["model"], tokenizer)
-    loss_fn = get_loss(config_dict["loss"])
 
     # Setup trainer
     trainer = get_trainer(
-        config_dict["trainer"], model, tokenizer, train_data, valid_data, loss_fn
+        config_dict["trainer"], model, tokenizer, train_data, valid_data
     )
 
     # Train
     trainer.train()
 
-
-# def get_model(
-
-# ):
-#     # get data config
-
-#     # get model
 
 if __name__ == "__main__":
     main()

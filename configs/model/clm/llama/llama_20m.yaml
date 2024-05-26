@@ -1,7 +1,5 @@
 data:
   data_dir: /mnt/iem-nas/home/qinzhen/qinzhen/data/xtrainers_data/wikitext2_gpt2_seq_1024 # change this
-loss:
-  loss_type: naive_ce
 model:
   model_type: causal_lm
   model_name: llama
@@ -14,6 +12,8 @@ model:
     max_position_embeddings: 2048
 trainer:
   type: accelerate
+  loss:
+    type: naive_ce
   training_config:
     num_train_epochs: 10
     num_warmup_steps: 100

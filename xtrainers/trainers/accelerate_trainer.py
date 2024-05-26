@@ -5,6 +5,7 @@ import math
 import os
 
 import torch
+import torch.nn as nn
 from accelerate import Accelerator
 from accelerate.logging import get_logger
 from torch.utils.data import DataLoader
@@ -28,7 +29,6 @@ class AccTrainer:
         tokenizer,
         train_data,
         valid_data,
-        loss_fn,
     ):
         super().__init__()
 
@@ -36,6 +36,7 @@ class AccTrainer:
         self.optimizer_config_dict = config_dict["optimizer"]
         self.lr_scheduler_config_dict = config_dict["lr_scheduler"]
         self.checkpoints_config_dict = config_dict["checkpoints"]
+        self.loss_type = config_dict["loss"]["type"]
 
         self.accelerator = Accelerator(
             gradient_accumulation_steps=self.train_config_dict[
@@ -60,6 +61,14 @@ class AccTrainer:
         ) = self.accelerator.prepare(
             model, optimizer, train_dataloader, valid_dataloader, lr_scheduler
         )
+        self.loss_fn = self.get_loss_fn()
+        
+    def get_loss_fn(self):
+        loss_type = self.loss_type
+        if loss_type == "naive_ce":
+            return nn.CrossEntropyLoss()
+        else:
+            return nn.CrossEntropyLoss()
 
     def get_dataloader(self, train_data, valid_data):
         # DataLoaders creation:
@@ -148,6 +157,19 @@ class AccTrainer:
         )
 
         return lr_scheduler
+    
+    def compute_loss(self, batch, logits):
+        # Shift so that tokens < n predict n
+        shift_logits = logits[..., :-1, :]
+        shift_labels = batch["input_ids"][..., 1:]
+        # Flatten the tokens
+        shift_logits = shift_logits.reshape(-1, shift_logits.shape[-1])
+        shift_labels = shift_labels.reshape(-1)
+        # Enable model parallelism
+        shift_labels = shift_labels.to(shift_logits.device)
+        loss = self.loss_fn(shift_logits, shift_labels)
+        
+        return loss
 
     def train(self):
         # Figure out how many steps we should save the Accelerator states
@@ -226,7 +248,7 @@ class AccTrainer:
             for step, batch in enumerate(active_dataloader):
                 with self.accelerator.accumulate(self.model):
                     outputs = self.model(**batch)
-                    loss = outputs.loss
+                    loss = self.compute_loss(batch, outputs.logits)
                     self.accelerator.backward(loss)
                     self.optimizer.step()
                     self.lr_scheduler.step()
@@ -257,7 +279,7 @@ class AccTrainer:
                 with torch.no_grad():
                     outputs = self.model(**batch)
 
-                loss = outputs.loss
+                loss = self.compute_loss(batch, outputs.logits)
                 losses.append(
                     self.accelerator.gather_for_metrics(
                         loss.repeat(self.train_config_dict["valid_batch_size"])
