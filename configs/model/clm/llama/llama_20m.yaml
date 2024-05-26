@@ -1,3 +1,7 @@
+data:
+  data_dir: /mnt/iem-nas/home/qinzhen/qinzhen/data/xtrainers_data/wikitext2_gpt2_seq_1024 # change this
+loss:
+  loss_type: naive_ce
 model:
   model_type: causal_lm
   model_name: llama
@@ -8,7 +12,26 @@ model:
     num_hidden_layers: 6
     num_attention_heads: 4
     max_position_embeddings: 2048
-data:
-  data_dir: /mnt/iem-nas/home/qinzhen/qinzhen/data/xtrainers_data/wikitext2_gpt2_seq_1024 # change this
-loss:
-  loss_type: ce
+trainer:
+  type: accelerate
+  training_config:
+    num_train_epochs: 10
+    num_warmup_steps: 100
+    train_batch_size: 48
+    valid_batch_size: 12
+    learning_rate: 0.0005
+    weight_decay: 0.05
+    gradient_accumulation_steps: 2
+    checkpointing_steps: 1000
+    output_dir: checkpoints_test/llama_20m_test
+    log_interval: 10
+  optimizer:
+    type: adamw
+  lr_scheduler:
+    type: cosine
+  checkpoints:
+    checkpoint_interval: 10
+    checkpoints_path: /fsx/ferdinandmom/ferdinand-hf/brrr/nanotron/examples/checkpoints
+    checkpoints_path_is_shared_file_system: false
+    resume_checkpoint_path: null
+    save_initial_state: false
