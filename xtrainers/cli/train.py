@@ -2,7 +2,6 @@ import argparse
 import os
 
 import datasets
-import torch.nn as nn
 import yaml
 from transformers import AutoModelForCausalLM, AutoTokenizer, LlamaConfig
 from yaml.loader import SafeLoader
@@ -77,9 +76,7 @@ def get_trainer_class(config_dict):
 def get_trainer(config_dict, model, tokenizer, train_data, valid_data):
     trainer_class = get_trainer_class(config_dict)
 
-    trainer = trainer_class(
-        config_dict, model, tokenizer, train_data, valid_data
-    )
+    trainer = trainer_class(config_dict, model, tokenizer, train_data, valid_data)
 
     return trainer
 

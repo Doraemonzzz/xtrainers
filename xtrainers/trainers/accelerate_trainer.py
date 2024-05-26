@@ -62,7 +62,7 @@ class AccTrainer:
             model, optimizer, train_dataloader, valid_dataloader, lr_scheduler
         )
         self.loss_fn = self.get_loss_fn()
-        
+
     def get_loss_fn(self):
         loss_type = self.loss_type
         if loss_type == "naive_ce":
@@ -157,7 +157,7 @@ class AccTrainer:
         )
 
         return lr_scheduler
-    
+
     def compute_loss(self, batch, logits):
         # Shift so that tokens < n predict n
         shift_logits = logits[..., :-1, :]
@@ -168,7 +168,7 @@ class AccTrainer:
         # Enable model parallelism
         shift_labels = shift_labels.to(shift_logits.device)
         loss = self.loss_fn(shift_logits, shift_labels)
-        
+
         return loss
 
     def train(self):
