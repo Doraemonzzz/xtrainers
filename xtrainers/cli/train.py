@@ -2,9 +2,16 @@ import argparse
 import os
 
 import datasets
+import torch.nn as nn
 import yaml
 from transformers import AutoModelForCausalLM, AutoTokenizer, LlamaConfig
 from yaml.loader import SafeLoader
+
+VOCAB_BASE = 8
+
+
+def convert_to_multiple_of_base(n, base):
+    return base * ((n + base - 1) // base)
 
 
 def get_args():
@@ -29,11 +36,18 @@ CONFIG_TO_MODEL_CLASS = {
 }
 
 
-def get_model(config_dict):
+def get_model(config_dict, tokenizer):
     model_config_class = CONFIG_TO_CONFIG_CLASS[config_dict["model_name"]]
+    config_dict["model_config"]["vocab_size"] = len(tokenizer)
     model_config = model_config_class.from_dict(config_dict["model_config"])
     model_class = CONFIG_TO_MODEL_CLASS[config_dict["model_type"]]
     model = model_class.from_config(model_config)
+
+    # resize the embedding dim
+    embedding_size = model.get_input_embeddings().weight.shape[0]
+    model.resize_token_embeddings(
+        convert_to_multiple_of_base(embedding_size, VOCAB_BASE)
+    )
     print(model)
 
 
@@ -48,16 +62,23 @@ def get_data(config_dict):
     return tokenizer, train_data, valid_data
 
 
+def get_loss(config_dict):
+    if config_dict["loss_type"] == "naive_ce":
+        return nn.CrossEntropyLoss
+    else:
+        return nn.CrossEntropyLoss
+
+
 def main():
     args = get_args()
     config_dict = get_configs(args.config_file)
 
     print(config_dict)
 
-    # Get model, data, loss
-    get_model(config_dict["model"])
+    # Get tokenizer, data, model, loss
     tokenizer, train_data, valid_data = get_data(config_dict["data"])
-    # loss = get_loss(config_file.loss)
+    get_model(config_dict["model"], tokenizer)
+    get_loss(config_dict["loss"])
 
     # # Setup trainer
     # trainer = get_trainer(config_file, model, dataloader, loss)

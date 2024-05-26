@@ -10,4 +10,5 @@ model:
     max_position_embeddings: 2048
 data:
   data_dir: /mnt/iem-nas/home/qinzhen/qinzhen/data/xtrainers_data/wikitext2_gpt2_seq_1024 # change this
-
+loss:
+  loss_type: ce

@@ -195,9 +195,11 @@ def clm_preprocess(args):
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
+    print(f"Origin tokenizer size {len(tokenizer)}")
     tokenizer.add_special_tokens(
         {"pad_token": "[PAD]"}
     )  # ref https://github.com/huggingface/transformers/issues/22794#issuecomment-1646520679
+    print(f"Post preprocess tokenizer size {len(tokenizer)}")
     print(f"Tokenizer bos token id: {tokenizer.bos_token_id}")
     print(f"Tokenizer eos token id: {tokenizer.eos_token_id}")
     print(f"Tokenizer pad token id: {tokenizer.pad_token_id}")
