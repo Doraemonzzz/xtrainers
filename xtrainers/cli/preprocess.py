@@ -266,6 +266,7 @@ def clm_preprocess(args):
         load_from_cache_file=not args.overwrite_cache,
         desc=f"Grouping texts in chunks of {block_size}",
     )
+    print(lm_datasets)
 
     # save data
     data_name = f"{args.output_name}_seq_{block_size}"

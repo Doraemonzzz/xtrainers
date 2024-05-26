@@ -107,8 +107,8 @@ def main():
         config_dict["trainer"], model, tokenizer, train_data, valid_data, loss_fn
     )
 
-    # # Train
-    # trainer.train()
+    # Train
+    trainer.train()
 
 
 # def get_model(

@@ -12,6 +12,12 @@ from tqdm.auto import tqdm
 from transformers import default_data_collator, get_scheduler
 
 logger = get_logger(__name__)
+# Make one log on every process with the configuration for debugging.
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%m/%d/%Y %H:%M:%S",
+    level=logging.INFO,
+)
 
 
 class AccTrainer:
@@ -26,36 +32,59 @@ class AccTrainer:
     ):
         super().__init__()
 
-        train_config_dict = config_dict["training_config"]
-        config_dict["optimizer"]
-        lr_scheduler_config_dict = config_dict["lr_scheduler"]
-        config_dict["checkpoints"]
+        self.train_config_dict = config_dict["training_config"]
+        self.optimizer_config_dict = config_dict["optimizer"]
+        self.lr_scheduler_config_dict = config_dict["lr_scheduler"]
+        self.checkpoints_config_dict = config_dict["checkpoints"]
 
-        accelerator = Accelerator(
-            gradient_accumulation_steps=train_config_dict["gradient_accumulation_steps"]
+        self.accelerator = Accelerator(
+            gradient_accumulation_steps=self.train_config_dict[
+                "gradient_accumulation_steps"
+            ]
+        )
+        self.total_batch_size = len(train_data)
+        # Init dataloader
+        train_dataloader, valid_dataloader = self.get_dataloader(train_data, valid_data)
+        # Init optimizer
+        optimizer = self.get_optimizer(model)
+        # Init lr scheduler
+        lr_scheduler = self.get_lr_scheduler(optimizer, train_dataloader)
+
+        # Prepare everything with our `accelerator`.
+        (
+            self.model,
+            self.optimizer,
+            self.train_dataloader,
+            self.valid_dataloader,
+            self.lr_scheduler,
+        ) = self.accelerator.prepare(
+            model, optimizer, train_dataloader, valid_dataloader, lr_scheduler
         )
 
-        # Make one log on every process with the configuration for debugging.
-        logging.basicConfig(
-            format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-            datefmt="%m/%d/%Y %H:%M:%S",
-            level=logging.INFO,
-        )
-        logger.info(accelerator.state, main_process_only=False)
-
+    def get_dataloader(self, train_data, valid_data):
         # DataLoaders creation:
         train_dataloader = DataLoader(
             train_data,
             shuffle=False,
             collate_fn=default_data_collator,
-            batch_size=train_config_dict["train_batch_size"],
+            batch_size=self.train_config_dict["train_batch_size"],
         )
         valid_dataloader = DataLoader(
             valid_data,
             collate_fn=default_data_collator,
-            batch_size=train_config_dict["valid_batch_size"],
+            batch_size=self.train_config_dict["valid_batch_size"],
         )
 
+        return train_dataloader, valid_dataloader
+
+    def get_optimizer_class(self):
+        optimizer_type = self.optimizer_config_dict["type"]
+        if optimizer_type == "adamw":
+            return torch.optim.AdamW
+        else:
+            return torch.optim.AdamW
+
+    def get_optimizer(self, model):
         # Optimizer
         # Split weights in two groups, one with weight decay and the other not.
         no_decay = [
@@ -64,92 +93,90 @@ class AccTrainer:
             "input_layernorm.weight",
             "post_attention_layernorm.weight",
         ]
-        # for n, p in model.named_parameters():
-        #     print(n, any(nd in n for nd in no_decay))
         optimizer_grouped_parameters = [
             {
                 "params": [
                     p
                     for n, p in model.named_parameters()
-                    if not any(nd in n for nd in no_decay)
+                    if p.requires_grad and (not any(nd in n for nd in no_decay))
                 ],
-                "weight_decay": train_config_dict["weight_decay"],
+                "weight_decay": self.train_config_dict["weight_decay"],
             },
             {
                 "params": [
                     p
                     for n, p in model.named_parameters()
-                    if any(nd in n for nd in no_decay)
+                    if p.requires_grad and (any(nd in n for nd in no_decay))
                 ],
                 "weight_decay": 0.0,
             },
         ]
-        optimizer = torch.optim.AdamW(
-            optimizer_grouped_parameters, lr=train_config_dict["learning_rate"]
+
+        optimizer_class = self.get_optimizer_class()
+        optimizer = optimizer_class(
+            optimizer_grouped_parameters, lr=self.train_config_dict["learning_rate"]
         )
 
+        return optimizer
+
+    def get_lr_scheduler(self, optimizer, train_dataloader):
         # Scheduler and math around the number of training steps.
         overrode_max_train_steps = False
         num_update_steps_per_epoch = math.ceil(
-            len(train_dataloader) / train_config_dict["gradient_accumulation_steps"]
+            len(train_dataloader)
+            / self.train_config_dict["gradient_accumulation_steps"]
         )
-        max_train_steps = train_config_dict.get("max_train_steps", 0)
+        max_train_steps = self.train_config_dict.get("max_train_steps", 0)
         if max_train_steps == 0:
             max_train_steps = (
-                train_config_dict["num_train_epochs"] * num_update_steps_per_epoch
+                self.train_config_dict["num_train_epochs"] * num_update_steps_per_epoch
             )
             overrode_max_train_steps = True
 
+        # Afterwards we recalculate our number of training epochs
+        self.max_train_steps = max_train_steps
+        self.num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
+
         lr_scheduler = get_scheduler(
-            name=lr_scheduler_config_dict["type"],
+            name=self.lr_scheduler_config_dict["type"],
             optimizer=optimizer,
-            num_warmup_steps=train_config_dict["num_warmup_steps"]
-            * accelerator.num_processes,
+            num_warmup_steps=self.train_config_dict["num_warmup_steps"]
+            * self.accelerator.num_processes,
             num_training_steps=max_train_steps
             if overrode_max_train_steps
-            else max_train_steps * accelerator.num_processes,
+            else max_train_steps * self.accelerator.num_processes,
         )
 
-        # Prepare everything with our `accelerator`.
-        (
-            model,
-            optimizer,
-            train_dataloader,
-            valid_dataloader,
-            lr_scheduler,
-        ) = accelerator.prepare(
-            model, optimizer, train_dataloader, valid_dataloader, lr_scheduler
-        )
+        return lr_scheduler
 
-        # Afterwards we recalculate our number of training epochs
-        num_train_epochs = math.ceil(max_train_steps / num_update_steps_per_epoch)
-
+    def train(self):
         # Figure out how many steps we should save the Accelerator states
-        checkpointing_steps = train_config_dict["checkpointing_steps"]
+        checkpointing_steps = self.train_config_dict["checkpointing_steps"]
 
         # Train!
         total_batch_size = (
-            train_config_dict["train_batch_size"]
-            * accelerator.num_processes
-            * train_config_dict["gradient_accumulation_steps"]
+            self.train_config_dict["train_batch_size"]
+            * self.accelerator.num_processes
+            * self.train_config_dict["gradient_accumulation_steps"]
         )
 
         logger.info("***** Running training *****")
-        logger.info(f"  Num examples = {len(train_data)}")
-        logger.info(f"  Num Epochs = {num_train_epochs}")
+        logger.info(f"  Num examples = {self.total_batch_size}")
+        logger.info(f"  Num Epochs = {self.num_train_epochs}")
         logger.info(
-            f"  Instantaneous batch size per device = {train_config_dict['train_batch_size']}"
+            f"  Instantaneous batch size per device = {self.train_config_dict['train_batch_size']}"
         )
         logger.info(
             f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}"
         )
         logger.info(
-            f"  Gradient Accumulation steps = {train_config_dict['gradient_accumulation_steps']}"
+            f"  Gradient Accumulation steps = {self.train_config_dict['gradient_accumulation_steps']}"
         )
-        logger.info(f"  Total optimization steps = {max_train_steps}")
+        logger.info(f"  Total optimization steps = {self.max_train_steps}")
         # Only show the progress bar once on each machine.
         progress_bar = tqdm(
-            range(max_train_steps), disable=not accelerator.is_local_main_process
+            range(self.max_train_steps),
+            disable=not self.accelerator.is_local_main_process,
         )
         completed_steps = 0
         starting_epoch = 0
@@ -186,54 +213,54 @@ class AccTrainer:
         # update the progress_bar if load from checkpoint
         progress_bar.update(completed_steps)
 
-        for epoch in range(starting_epoch, train_config_dict["num_train_epochs"]):
-            model.train()
+        for epoch in range(starting_epoch, self.train_config_dict["num_train_epochs"]):
+            self.model.train()
             # if args.resume_from_checkpoint and epoch == starting_epoch and resume_step is not None:
             if False:
                 # We skip the first `n` batches in the dataloader when resuming from a checkpoint
-                active_dataloader = accelerator.skip_first_batches(
-                    train_dataloader, resume_step
+                active_dataloader = self.accelerator.skip_first_batches(
+                    self.train_dataloader, resume_step
                 )
             else:
-                active_dataloader = train_dataloader
+                active_dataloader = self.train_dataloader
             for step, batch in enumerate(active_dataloader):
-                with accelerator.accumulate(model):
-                    outputs = model(**batch)
+                with self.accelerator.accumulate(self.model):
+                    outputs = self.model(**batch)
                     loss = outputs.loss
-                    accelerator.backward(loss)
-                    optimizer.step()
-                    lr_scheduler.step()
-                    optimizer.zero_grad()
+                    self.accelerator.backward(loss)
+                    self.optimizer.step()
+                    self.lr_scheduler.step()
+                    self.optimizer.zero_grad()
 
-                if step % train_config_dict["log_interval"] == 0:
+                if step % self.train_config_dict["log_interval"] == 0:
                     logger.info(f"step: {step}, loss: {loss}")
 
                 # Checks if the accelerator has performed an optimization step behind the scenes
-                if accelerator.sync_gradients:
+                if self.accelerator.sync_gradients:
                     progress_bar.update(1)
                     completed_steps += 1
 
                 if isinstance(checkpointing_steps, int):
                     if completed_steps % checkpointing_steps == 0:
                         output_dir = f"step_{completed_steps}"
-                        if train_config_dict["output_dir"] is not None:
+                        if self.train_config_dict["output_dir"] is not None:
                             output_dir = os.path.join(
-                                train_config_dict["output_dir"], output_dir
+                                self.train_config_dict["output_dir"], output_dir
                             )
-                        accelerator.save_state(output_dir)
-                if completed_steps >= max_train_steps:
+                        self.accelerator.save_state(output_dir)
+                if completed_steps >= self.max_train_steps:
                     break
 
-            model.eval()
+            self.model.eval()
             losses = []
-            for step, batch in enumerate(valid_dataloader):
+            for step, batch in enumerate(self.valid_dataloader):
                 with torch.no_grad():
-                    outputs = model(**batch)
+                    outputs = self.model(**batch)
 
                 loss = outputs.loss
                 losses.append(
-                    accelerator.gather_for_metrics(
-                        loss.repeat(train_config_dict["valid_batch_size"])
+                    self.accelerator.gather_for_metrics(
+                        loss.repeat(self.train_config_dict["valid_batch_size"])
                     )
                 )
 
@@ -250,12 +277,8 @@ class AccTrainer:
 
             # save every epoch
             output_dir = f"epoch_{epoch}"
-            if train_config_dict["output_dir"] is not None:
-                output_dir = os.path.join(train_config_dict["output_dir"], output_dir)
-            accelerator.save_state(output_dir)
-
-    def get_optimizer(self, optimizer_type):
-        if optimizer_type == "adamw":
-            return torch.optim.AdamW
-        else:
-            return torch.optim.AdamW
+            if self.train_config_dict["output_dir"] is not None:
+                output_dir = os.path.join(
+                    self.train_config_dict["output_dir"], output_dir
+                )
+            self.accelerator.save_state(output_dir)
