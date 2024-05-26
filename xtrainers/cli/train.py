@@ -1,10 +1,10 @@
 import argparse
-
-import yaml
 import os
+
 import datasets
 import torch.nn as nn
-from transformers import AutoModelForCausalLM, LlamaConfig, AutoTokenizer
+import yaml
+from transformers import AutoModelForCausalLM, AutoTokenizer, LlamaConfig
 from yaml.loader import SafeLoader
 
 from xtrainers.trainers import AccTrainer
@@ -18,8 +18,10 @@ CONFIG_TO_MODEL_CLASS = {
     "causal_lm": AutoModelForCausalLM,
 }
 
+
 def convert_to_multiple_of_base(n, base):
     return base * ((n + base - 1) // base)
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -36,20 +38,21 @@ def get_configs(config_file):
     return config_dict
 
 
-
-
 def get_model(config_dict, tokenizer):
     model_config_class = CONFIG_TO_CONFIG_CLASS[config_dict["model_name"]]
     config_dict["model_config"]["vocab_size"] = len(tokenizer)
     model_config = model_config_class.from_dict(config_dict["model_config"])
     model_class = CONFIG_TO_MODEL_CLASS[config_dict["model_type"]]
     model = model_class.from_config(model_config)
-    
+
     # resize the embedding dim
     embedding_size = model.get_input_embeddings().weight.shape[0]
-    model.resize_token_embeddings(convert_to_multiple_of_base(embedding_size, VOCAB_BASE))
-    
+    model.resize_token_embeddings(
+        convert_to_multiple_of_base(embedding_size, VOCAB_BASE)
+    )
+
     return model
+
 
 def get_data(config_dict):
     data = datasets.load_from_disk(config_dict["data_dir"])
@@ -58,29 +61,35 @@ def get_data(config_dict):
     tokenizer = AutoTokenizer.from_pretrained(
         os.path.join(config_dict["data_dir"], "tokenizer")
     )
-    
+
     return tokenizer, train_data, valid_data
+
 
 def get_loss(config_dict):
     if config_dict["loss_type"] == "naive_ce":
         return nn.CrossEntropyLoss
     else:
         return nn.CrossEntropyLoss
-    
+
+
 def get_trainer_class(config_dict):
     if config_dict["type"] == "accelerate":
         trainer = AccTrainer
     else:
         trainer = AccTrainer
-        
+
     return trainer
+
 
 def get_trainer(config_dict, model, tokenizer, train_data, valid_data, loss_fn):
     trainer_class = get_trainer_class(config_dict)
-    
-    trainer = trainer_class(config_dict, model, tokenizer, train_data, valid_data, loss_fn)
-    
+
+    trainer = trainer_class(
+        config_dict, model, tokenizer, train_data, valid_data, loss_fn
+    )
+
     return trainer
+
 
 def main():
     args = get_args()
@@ -94,7 +103,9 @@ def main():
     loss_fn = get_loss(config_dict["loss"])
 
     # Setup trainer
-    trainer = get_trainer(config_dict["trainer"], model, tokenizer, train_data, valid_data, loss_fn)
+    trainer = get_trainer(
+        config_dict["trainer"], model, tokenizer, train_data, valid_data, loss_fn
+    )
 
     # # Train
     # trainer.train()
