@@ -1,0 +1,1 @@
+xtrainers-train --config-file ../../configs/alm/llama_40m.yaml

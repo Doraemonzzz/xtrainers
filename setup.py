@@ -44,6 +44,11 @@ setup(
     # Note that this is a string of words separated by whitespace, not a list.
     keywords="",
     packages=find_packages(exclude=["tests", "results"]),
+    entry_points={
+        "console_scripts": [
+            "xtrainers-train = xtrainers.cli.train:main",
+        ],
+    },
     include_package_data=True,
     install_requires=[],
     python_requires=">=3.7",
