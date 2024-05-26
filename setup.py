@@ -47,6 +47,7 @@ setup(
     entry_points={
         "console_scripts": [
             "xtrainers-train = xtrainers.cli.train:main",
+            "xtrainers-preprocess = xtrainers.cli.preprocess:main",
         ],
     },
     include_package_data=True,
