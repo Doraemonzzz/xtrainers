@@ -26,3 +26,9 @@ Plan to support the following parallel for clm:
 - [ ] Expert Parallel
 
 ## Ack
+
+- https://github.com/huggingface/transformers/tree/main/examples/pytorch/language-modeling
+- https://github.com/huggingface/nanotron
+- https://github.com/JonasGeiping/cramming
+- https://github.com/jzhang38/EasyContext
+- https://github.com/facebookresearch/metaseq
