@@ -9,6 +9,5 @@ model:
     num_attention_heads: 4
     max_position_embeddings: 2048
 data:
-  tokenizer_path:
+  data_dir: /mnt/iem-nas/home/qinzhen/qinzhen/data/xtrainers_data/wikitext2_gpt2_seq_1024 # change this
 
-  data_path:

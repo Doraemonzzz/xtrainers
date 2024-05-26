@@ -1,7 +1,9 @@
 import argparse
+import os
 
+import datasets
 import yaml
-from transformers import AutoModelForCausalLM, LlamaConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, LlamaConfig
 from yaml.loader import SafeLoader
 
 
@@ -35,16 +37,26 @@ def get_model(config_dict):
     print(model)
 
 
+def get_data(config_dict):
+    data = datasets.load_from_disk(config_dict["data_dir"])
+    train_data = data["train"]
+    valid_data = data["validation"]
+    tokenizer = AutoTokenizer.from_pretrained(
+        os.path.join(config_dict["data_dir"], "tokenizer")
+    )
+
+    return tokenizer, train_data, valid_data
+
+
 def main():
     args = get_args()
     config_dict = get_configs(args.config_file)
 
     print(config_dict)
 
-    # Get model, dataloader, loss
+    # Get model, data, loss
     get_model(config_dict["model"])
-    assert False
-    # dataloader = get_dataloader(config_file.dataloader)
+    tokenizer, train_data, valid_data = get_data(config_dict["data"])
     # loss = get_loss(config_file.loss)
 
     # # Setup trainer
